@@ -28,8 +28,7 @@ In the api settings of solarprgnose.de you have to do the following:
 	Placeholder for the next version (at the beginning of the line):
 	### **WORK IN PROGRESS**
 -->
-
-### **WORK IN PROGRESS**
+### 1.2.2 (2025-02-08)
 
 - (Scrounger) bug fixes
 
@@ -58,7 +57,7 @@ In the api settings of solarprgnose.de you have to do the following:
 
 MIT License
 
-Copyright (c) 2024 Scrounger <scrounger@gmx.net>
+Copyright (c) 2025 Scrounger <scrounger@gmx.net>
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
