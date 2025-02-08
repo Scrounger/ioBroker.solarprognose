@@ -135,10 +135,14 @@ class Solarprognose extends utils.Adapter {
 	private async updateData(): Promise<void> {
 		const logPrefix = '[updateData]:';
 
+		let nextUpdateTime = undefined;
+
 		try {
 			if (this.config.project && this.config.accessToken && this.config.solarprognoseItem && this.config.solarprognoseId) {
 				const url = `${this.apiEndpoint}?access-token=${this.config.accessToken}&project=${this.config.project}&item=${this.config.solarprognoseItem}&id=${this.config.solarprognoseId}&algorithm=${this.config.solarprognoseAlgorithm}&type=hourly&_format=json`;
 				const response = await this.downloadData(url);
+
+
 
 				this.log.silly(JSON.stringify(response));
 
@@ -152,10 +156,7 @@ class Solarprognose extends utils.Adapter {
 						await this.calcAccuracy();
 
 						if (this.updateSchedule) this.updateSchedule.cancel()
-						const nextUpdateTime = this.getNextUpdateTime(response.preferredNextApiRequestAt);
-						this.updateSchedule = schedule.scheduleJob(nextUpdateTime.toDate(), async () => {
-							this.updateData();
-						});
+						nextUpdateTime = this.getNextUpdateTime(response.preferredNextApiRequestAt);
 
 						await this.createOrUpdateState(this.namespace, myTypes.stateDefinition['lastUpdate'], moment().format(`ddd ${this.dateFormat} HH:mm:ss`), 'lastUpdate');
 
@@ -168,12 +169,22 @@ class Solarprognose extends utils.Adapter {
 				} else {
 					this.log.error(`${logPrefix} no data received!`);
 				}
-
 			} else {
 				this.log.error(`${logPrefix} settings missing. Please check your adapter configuration!`);
 			}
 		} catch (error: any) {
 			this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+		}
+
+		if (nextUpdateTime) {
+			this.updateSchedule = schedule.scheduleJob(nextUpdateTime.toDate(), async () => {
+				this.updateData();
+			});
+		} else {
+			this.log.warn(`${logPrefix} no next update time receive, try again in 1 hour`);
+			this.updateSchedule = schedule.scheduleJob(moment().add(1, 'hours').toDate(), async () => {
+				this.updateData();
+			});
 		}
 	}
 

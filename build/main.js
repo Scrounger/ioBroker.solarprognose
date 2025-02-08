@@ -128,6 +128,7 @@ class Solarprognose extends utils.Adapter {
   // }
   async updateData() {
     const logPrefix = "[updateData]:";
+    let nextUpdateTime = void 0;
     try {
       if (this.config.project && this.config.accessToken && this.config.solarprognoseItem && this.config.solarprognoseId) {
         const url = `${this.apiEndpoint}?access-token=${this.config.accessToken}&project=${this.config.project}&item=${this.config.solarprognoseItem}&id=${this.config.solarprognoseId}&algorithm=${this.config.solarprognoseAlgorithm}&type=hourly&_format=json`;
@@ -142,10 +143,7 @@ class Solarprognose extends utils.Adapter {
             await this.calcAccuracy();
             if (this.updateSchedule)
               this.updateSchedule.cancel();
-            const nextUpdateTime = this.getNextUpdateTime(response.preferredNextApiRequestAt);
-            this.updateSchedule = schedule.scheduleJob(nextUpdateTime.toDate(), async () => {
-              this.updateData();
-            });
+            nextUpdateTime = this.getNextUpdateTime(response.preferredNextApiRequestAt);
             await this.createOrUpdateState(this.namespace, myTypes.stateDefinition["lastUpdate"], (0, import_moment.default)().format(`ddd ${this.dateFormat} HH:mm:ss`), "lastUpdate");
             this.log.info(`${logPrefix} data successfully updated, next update: ${nextUpdateTime.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
           } else {
@@ -159,6 +157,16 @@ class Solarprognose extends utils.Adapter {
       }
     } catch (error) {
       this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+    }
+    if (nextUpdateTime) {
+      this.updateSchedule = schedule.scheduleJob(nextUpdateTime.toDate(), async () => {
+        this.updateData();
+      });
+    } else {
+      this.log.warn(`${logPrefix} no next update time receive, try again in 1 hour`);
+      this.updateSchedule = schedule.scheduleJob((0, import_moment.default)().add(1, "hours").toDate(), async () => {
+        this.updateData();
+      });
     }
   }
   async processData() {
