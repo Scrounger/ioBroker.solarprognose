@@ -74,7 +74,6 @@ export class SpApi {
     async retrievData(url, options = { method: 'GET' }, retry = true) {
         const logPrefix = `[${this.logPrefix}.retrievData]`;
         try {
-            this.log.debug(`${logPrefix} url: ${url}`);
             const response = await this.retrieve(url, options);
             if (response) {
                 const data = await response.body.json();

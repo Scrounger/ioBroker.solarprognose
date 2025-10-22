@@ -119,7 +119,6 @@ export class SpApi {
         const logPrefix = `[${this.logPrefix}.retrievData]`
 
         try {
-            this.log.debug(`${logPrefix} url: ${url}`);
             const response = await this.retrieve(url, options);
 
             if (response) {

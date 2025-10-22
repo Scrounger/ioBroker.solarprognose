@@ -54,19 +54,6 @@
         "pl": "dodano obliczenia dokładności\nenergia dodana\nenergia od teraz dodana\npoprawki błędów",
         "uk": "розрахунок точності додано\nдодано енергію\nдодано енергію\nвиправлення помилок",
         "zh-cn": "添加的精确计算\n现在添加能量\n从现在开始添加能量\n错误修正"
-      },
-      "1.0.0": {
-        "en": "initial release",
-        "de": "erstausstrahlung",
-        "ru": "первоначальный выпуск",
-        "pt": "lançamento inicial",
-        "nl": "eerste release",
-        "fr": "libération initiale",
-        "it": "rilascio iniziale",
-        "es": "liberación inicial",
-        "pl": "początkowe zwolnienie",
-        "uk": "початковий реліз",
-        "zh-cn": "初步释放"
       }
     },
     "titleLang": {

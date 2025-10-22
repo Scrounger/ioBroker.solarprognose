@@ -13,14 +13,19 @@
 
 ## solarprognose adapter for ioBroker
 
-Solar forecast based on the API from solarprognose.de
+Solar forecast based on the API from [solarprognose.de](https://www.solarprognose.de/)
 
-## Important API Settings
+## API Configuration
 
-In the api settings of solarprgnose.de you have to do the following:
+1. Under Settings -> API Overview create an access token
 
-- Under Settings -> User profile all time zone `UTC (UTC -00:00)` must be selected
-- Under Settings -> User settings, `Use the user timezone in the API` must be activated
+2. Under Settings -> User profile all time zone `UTC (UTC -00:00)` must be selected
+
+   ![img](doc/api_timezone.png)
+
+3. Under Settings -> User settings, `Use the user timezone in the API` must be activated
+
+   ![img](doc/api_use_timezone.png)
 
 ## Changelog
 

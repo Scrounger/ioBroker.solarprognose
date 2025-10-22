@@ -11,7 +11,8 @@
   "keywords": [
     "pv",
     "forecast",
-    "api"
+    "api",
+    "ioBroker"
   ],
   "repository": {
     "type": "git",

@@ -24,7 +24,7 @@ class Solarprognose extends utils.Adapter {
 		'lastUpdate'
 	];
 
-	public testMode = true;
+	public testMode = false;
 
 	apiEndpoint = 'https://www.solarprognose.de/web/solarprediction/api/v1';
 	updateSchedule: schedule.Job | undefined = undefined;
@@ -129,21 +129,33 @@ class Solarprognose extends utils.Adapter {
 	private async updateData(isAdapterStart: boolean = false): Promise<void> {
 		const logPrefix = '[updateData]:';
 
+		let nextUpdateTime = undefined;
+
 		try {
 			const result = await this.spApi.getHourlyData();
 
 			if (result) {
 				const myData = this.transformData(result);
+				await this.myIob.createOrUpdateStates(this.namespace, tree.prognose.get(), myData, myData, undefined, false, undefined, isAdapterStart);
 
-				this.log.warn(JSON.stringify(myData));
-
-				this.myIob.createOrUpdateStates(this.namespace, tree.prognose.get(), myData, myData, undefined, false, undefined, true);
+				nextUpdateTime = this.getNextUpdateTime(result.preferredNextApiRequestAt);
 			}
+
 		} catch (error: any) {
 			this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
 		}
-	}
 
+		if (nextUpdateTime) {
+			this.updateSchedule = schedule.scheduleJob(nextUpdateTime.toDate(), async () => {
+				this.updateData();
+			});
+		} else {
+			this.log.warn(`${logPrefix} no next update time receive, try again in 1 hour`);
+			this.updateSchedule = schedule.scheduleJob(moment().add(1, 'hours').toDate(), async () => {
+				this.updateData();
+			});
+		}
+	}
 
 	private transformData(progData: SolarPrognoseData): Prognose | undefined {
 		const logPrefix = '[updateData]:';
@@ -230,13 +242,44 @@ class Solarprognose extends utils.Adapter {
 				forecast: result,
 				json: json.sort((a, b) => a.timestamp - b.timestamp),
 				status: progData.status,
-				lastUpdate: moment().startOf('hour').unix() * 1000
+				lastUpdate: moment().unix() * 1000
 			};
 		} catch (error: any) {
 			this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
 		}
 
 		return undefined;
+	}
+
+	private getNextUpdateTime(preferredNextApiRequestAt: preferredNextApiRequestAt | undefined): moment.Moment {
+		const logPrefix = '[getNextUpdateTime]:';
+
+		let nextUpdate = moment().add(1, 'hours');
+
+		try {
+			if (preferredNextApiRequestAt && preferredNextApiRequestAt.epochTimeUtc) {
+				const nextApiRequestLog = moment(preferredNextApiRequestAt.epochTimeUtc * 1000).format(`ddd ${this.dateFormat} HH:mm:ss`);
+
+				if (!moment().isBefore(moment(preferredNextApiRequestAt.epochTimeUtc * 1000))) {
+					// 'preferredNextApiRequestAt' is in the past
+					this.log.debug(`${logPrefix} preferredNextApiRequestAt: '${nextApiRequestLog}' is in the past! Next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
+				} else if ((moment(preferredNextApiRequestAt.epochTimeUtc * 1000).diff(moment()) / (1000 * 60 * 60)) >= 1.1) {
+					// 'preferredNextApiRequestAt' is more than one hour in the future
+					this.log.debug(`${logPrefix} preferredNextApiRequestAt: '${nextApiRequestLog}' is more than one hour in the future! Next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
+				} else {
+					// using 'preferredNextApiRequestAt'
+					nextUpdate = moment(preferredNextApiRequestAt.epochTimeUtc * 1000);
+					this.log.debug(`${logPrefix} next update: ${moment(preferredNextApiRequestAt.epochTimeUtc * 1000).format(`ddd ${this.dateFormat} HH:mm:ss`)} by 'preferredNextApiRequestAt'`);
+				}
+			} else {
+				this.log.debug(`${logPrefix} no 'preferredNextApiRequestAt' exist, next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
+			}
+
+		} catch (err: any) {
+			console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
+		}
+
+		return nextUpdate;
 	}
 
 	// private async updateData(): Promise<void> {
@@ -479,37 +522,6 @@ class Solarprognose extends utils.Adapter {
 
 	// 	return undefined;
 	// }
-
-	private getNextUpdateTime(preferredNextApiRequestAt: preferredNextApiRequestAt | undefined): moment.Moment {
-		const logPrefix = '[getNextUpdateTime]:';
-
-		let nextUpdate = moment().add(1, 'hours');
-
-		try {
-			if (preferredNextApiRequestAt && preferredNextApiRequestAt.epochTimeUtc) {
-				const nextApiRequestLog = moment(preferredNextApiRequestAt.epochTimeUtc * 1000).format(`ddd ${this.dateFormat} HH:mm:ss`);
-
-				if (!moment().isBefore(moment(preferredNextApiRequestAt.epochTimeUtc * 1000))) {
-					// 'preferredNextApiRequestAt' is in the past
-					this.log.debug(`${logPrefix} preferredNextApiRequestAt: '${nextApiRequestLog}' is in the past! Next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
-				} else if ((moment(preferredNextApiRequestAt.epochTimeUtc * 1000).diff(moment()) / (1000 * 60 * 60)) >= 1.1) {
-					// 'preferredNextApiRequestAt' is more than one hour in the future
-					this.log.debug(`${logPrefix} preferredNextApiRequestAt: '${nextApiRequestLog}' is more than one hour in the future! Next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
-				} else {
-					// using 'preferredNextApiRequestAt'
-					nextUpdate = moment(preferredNextApiRequestAt.epochTimeUtc * 1000);
-					this.log.debug(`${logPrefix} next update: ${moment(preferredNextApiRequestAt.epochTimeUtc * 1000).format(`ddd ${this.dateFormat} HH:mm:ss`)} by 'preferredNextApiRequestAt'`);
-				}
-			} else {
-				this.log.debug(`${logPrefix} no 'preferredNextApiRequestAt' exist, next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
-			}
-
-		} catch (err: any) {
-			console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
-		}
-
-		return nextUpdate;
-	}
 }
 
 // replace only needed for dev system
