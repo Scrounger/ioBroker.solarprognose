@@ -5,13 +5,17 @@
 		"donation_link": {
 			"type": "staticLink",
 			"text": "You like the adapter? Then support me.",
-			"sm": 12,
 			"button": true,
 			"newLine": true,
 			"href": "https://www.paypal.com/cgi-bin/webscr?cmd=_s-xclick&hosted_button_id=VWAXSTS634G88&source=url",
 			"style": {
 				"justifyContent": "flex-start !important"
-			}
+			},
+			"xl": 12,
+			"lg": 12,
+			"md": 12,
+			"sm": 12,
+			"xs": 12
 		},
 		"dividerCredentials": {
 			"newLine": true,
@@ -23,14 +27,20 @@
 			"newLine": true,
 			"type": "text",
 			"label": "projectUsername",
+			"xl": 2,
+			"lg": 2,
+			"md": 2,
 			"sm": 12,
-			"md": 2
+			"xs": 12
 		},
 		"accessToken": {
 			"type": "password",
-			"label": "accessToken",
+			"label": "access token",
+			"xl": 2,
+			"lg": 2,
+			"md": 2,
 			"sm": 12,
-			"md": 2
+			"xs": 12
 		},
 		"dividerApiSettings": {
 			"newLine": true,
@@ -60,14 +70,20 @@
 					"value": "module_field"
 				}
 			],
+			"xl": 2,
+			"lg": 2,
+			"md": 2,
 			"sm": 12,
-			"md": 2
+			"xs": 12
 		},
 		"solarprognoseId": {
 			"type": "number",
 			"label": "solarprognoseId",
+			"xl": 2,
+			"lg": 2,
+			"md": 2,
 			"sm": 12,
-			"md": 2
+			"xs": 12
 		},
 		"solarprognoseAlgorithm": {
 			"type": "select",
@@ -86,8 +102,11 @@
 					"value": "clearsky"
 				}
 			],
+			"xl": 2,
+			"lg": 2,
+			"md": 2,
 			"sm": 12,
-			"md": 2
+			"xs": 12
 		},
 		"dividerForecast": {
 			"newLine": true,
@@ -107,30 +126,42 @@
 		"jsonTableEnabled": {
 			"newLine": true,
 			"type": "checkbox",
-			"label": "jsonTable",
+			"label": "json table",
+			"xl": 2,
+			"lg": 2,
+			"md": 2,
 			"sm": 12,
-			"md": 2
+			"xs": 12
 		},
 		"hourlyEnabled": {
 			"newLine": true,
 			"type": "checkbox",
 			"label": "hourlyEnabled",
+			"xl": 1,
+			"lg": 1,
+			"md": 1,
 			"sm": 12,
-			"md": 1
+			"xs": 12
 		},
 		"dailyEnabled": {
 			"newLine": true,
 			"type": "checkbox",
 			"label": "dailyEnabled",
+			"xl": 1,
+			"lg": 1,
+			"md": 1,
 			"sm": 12,
-			"md": 1
+			"xs": 12
 		},
 		"dailyInterpolation": {
 			"type": "checkbox",
 			"label": "dailyInterpolation",
-			"sm": 12,
+			"disabled": "!data.dailyEnabled",
+			"xl": 3,
+			"lg": 3,
 			"md": 3,
-			"disabled": "!data.dailyEnabled"
+			"sm": 12,
+			"xs": 12
 		},
 		"dividerCalculations": {
 			"newLine": true,
@@ -142,18 +173,22 @@
 			"newLine": true,
 			"type": "checkbox",
 			"label": "accuracy",
-			"sm": 12,
+			"disabled": "!data.dailyEnabled",
+			"xl": 1,
+			"lg": 1,
 			"md": 1,
-			"disabled": "!data.dailyEnabled"
+			"sm": 12,
+			"xs": 12
 		},
 		"todayEnergyObject": {
 			"type": "objectId",
 			"label": "Data point with energy generated today by PV",
-			"sm": 6,
-			"md": 6,
+			"disabled": "!data.dailyEnabled || !data.accuracyEnabled",
+			"xl": 6,
 			"lg": 6,
-			"xs": 6,
-			"disabled": "!data.dailyEnabled || !data.accuracyEnabled"
+			"md": 6,
+			"sm": 12,
+			"xs": 12
 		}
 	}
 }

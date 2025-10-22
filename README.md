@@ -28,6 +28,14 @@ In the api settings of solarprgnose.de you have to do the following:
 	Placeholder for the next version (at the beginning of the line):
 	### **WORK IN PROGRESS**
 -->
+
+### **WORK IN PROGRESS**
+
+- (Scrounger) dependencies updated
+- (Scrounger) node minimum set to 20
+- (Scrounger) converted to esm
+- (Scrounger) eslint 9 added
+
 ### 1.2.2 (2025-02-08)
 
 - (Scrounger) bug fixes

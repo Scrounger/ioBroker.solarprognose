@@ -1,446 +1,440 @@
-"use strict";
-var __create = Object.create;
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __copyProps = (to, from, except, desc) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-  }
-  return to;
-};
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
-var utils = __toESM(require("@iobroker/adapter-core"));
-var import_moment = __toESM(require("moment"));
-var schedule = __toESM(require("node-schedule"));
-var myTypes = __toESM(require("./lib/myTypes"));
-var myHelper = __toESM(require("./lib/helper"));
+/*
+ * Created with @iobroker/create-adapter v2.6.5
+ */
+// The adapter-core module gives you access to the core ioBroker functions
+// you need to create an adapter
+import * as utils from '@iobroker/adapter-core';
+import url from 'node:url';
+import moment from 'moment';
+import * as tree from './lib/tree/index.js';
+import { myIob } from './lib/myIob.js';
+import { SpApi } from './lib/api/sp-api.js';
 class Solarprognose extends utils.Adapter {
-  testMode = false;
-  apiEndpoint = "https://www.solarprognose.de/web/solarprediction/api/v1";
-  updateSchedule = void 0;
-  hourlySchedule = void 0;
-  interpolationSchedule = void 0;
-  solarData = void 0;
-  myTranslation;
-  constructor(options = {}) {
-    super({
-      ...options,
-      name: "solarprognose",
-      useFormatDate: true
-    });
-    this.on("ready", this.onReady.bind(this));
-    this.on("stateChange", this.onStateChange.bind(this));
-    this.on("unload", this.onUnload.bind(this));
-  }
-  /**
-   * Is called when databases are connected and adapter received configuration.
-   */
-  async onReady() {
-    const logPrefix = "[onReady]:";
-    try {
-      await this.loadTranslation();
-      await this.updateData();
-      if (this.config.dailyEnabled && this.config.accuracyEnabled && this.config.todayEnergyObject && await this.foreignObjectExists(this.config.todayEnergyObject)) {
-        await this.subscribeForeignStatesAsync(this.config.todayEnergyObject);
-      }
-      this.hourlySchedule = schedule.scheduleJob("0 * * * *", async () => {
-        this.updateCalcedEnergy();
-        this.calcAccuracy();
-      });
-      if (this.config.dailyInterpolation) {
-        this.interpolationSchedule = schedule.scheduleJob("*/5 * * * *", async () => {
-          this.updateCalcedEnergy();
-          this.calcAccuracy();
+    spApi;
+    myIob;
+    statesUsingValAsLastChanged = [
+        'lastUpdate'
+    ];
+    testMode = true;
+    apiEndpoint = 'https://www.solarprognose.de/web/solarprediction/api/v1';
+    updateSchedule = undefined;
+    hourlySchedule = undefined;
+    interpolationSchedule = undefined;
+    solarData = undefined;
+    myTranslation;
+    constructor(options = {}) {
+        super({
+            ...options,
+            name: 'solarprognose',
+            useFormatDate: true
         });
-      }
-    } catch (error) {
-      this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+        this.on('ready', this.onReady.bind(this));
+        this.on('stateChange', this.onStateChange.bind(this));
+        // this.on('objectChange', this.onObjectChange.bind(this));
+        // this.on('message', this.onMessage.bind(this));
+        this.on('unload', this.onUnload.bind(this));
     }
-  }
-  /**
-   * Is called when adapter shuts down - callback has to be called under any circumstances!
-   */
-  onUnload(callback) {
-    try {
-      if (this.updateSchedule)
-        this.updateSchedule.cancel();
-      if (this.hourlySchedule)
-        this.hourlySchedule.cancel();
-      if (this.interpolationSchedule)
-        this.interpolationSchedule.cancel();
-      callback();
-    } catch (e) {
-      callback();
+    /**
+     * Is called when databases are connected and adapter received configuration.
+     */
+    async onReady() {
+        const logPrefix = '[onReady]:';
+        try {
+            moment.locale(this.language);
+            await utils.I18n.init(`${utils.getAbsoluteDefaultDataDir().replace('iobroker-data/', '')}node_modules/iobroker.${this.name}/admin`, this);
+            this.myIob = new myIob(this, utils, this.statesUsingValAsLastChanged);
+            this.spApi = new SpApi(this);
+            if (this.config.project && this.config.accessToken && this.config.solarprognoseId) {
+                await this.updateData(true);
+                this.myIob.findMissingTranslation();
+            }
+            else {
+                this.log.error(`${logPrefix} project, token, device id and / or access token missing. Please check your adapter configuration!`);
+            }
+            // // Initialize your adapter here
+            // await this.loadTranslation();
+            // await this.updateData();
+            // if (this.config.dailyEnabled && this.config.accuracyEnabled && this.config.todayEnergyObject && (await this.foreignObjectExists(this.config.todayEnergyObject))) {
+            // 	await this.subscribeForeignStatesAsync(this.config.todayEnergyObject);
+            // }
+            // this.hourlySchedule = schedule.scheduleJob('0 * * * *', async () => {
+            // 	this.updateCalcedEnergy();
+            // 	this.calcAccuracy();
+            // });
+            // if (this.config.dailyInterpolation) {
+            // 	this.interpolationSchedule = schedule.scheduleJob('*/5 * * * *', async () => {
+            // 		this.updateCalcedEnergy();
+            // 		this.calcAccuracy();
+            // 	});
+            // }
+        }
+        catch (error) {
+            this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+        }
     }
-  }
-  // If you need to react to object changes, uncomment the following block and the corresponding line in the constructor.
-  // You also need to subscribe to the objects with `this.subscribeObjects`, similar to `this.subscribeStates`.
-  // /**
-  //  * Is called if a subscribed object changes
-  //  */
-  // private onObjectChange(id: string, obj: ioBroker.Object | null | undefined): void {
-  // 	if (obj) {
-  // 		// The object was changed
-  // 		this.log.info(`object ${id} changed: ${JSON.stringify(obj)}`);
-  // 	} else {
-  // 		// The object was deleted
-  // 		this.log.info(`object ${id} deleted`);
-  // 	}
-  // }
-  /**
-   * Is called if a subscribed state changes
-   */
-  async onStateChange(id, state) {
-    if (state) {
-      if (id = this.config.todayEnergyObject) {
-        this.updateCalcedEnergy();
-        this.calcAccuracy();
-      }
-    } else {
-    }
-  }
-  // If you need to accept messages in your adapter, uncomment the following block and the corresponding line in the constructor.
-  // /**
-  //  * Some message was sent to this instance over message box. Used by email, pushover, text2speech, ...
-  //  * Using this method requires 'common.messagebox' property to be set to true in io-package.json
-  //  */
-  // private onMessage(obj: ioBroker.Message): void {
-  // 	if (typeof obj === 'object' && obj.message) {
-  // 		if (obj.command === 'send') {
-  // 			// e.g. send email or pushover or whatever
-  // 			this.log.info('send command');
-  // 			// Send response in callback if required
-  // 			if (obj.callback) this.sendTo(obj.from, obj.command, 'Message received', obj.callback);
-  // 		}
-  // 	}
-  // }
-  async updateData() {
-    const logPrefix = "[updateData]:";
-    let nextUpdateTime = void 0;
-    try {
-      if (this.config.project && this.config.accessToken && this.config.solarprognoseItem && this.config.solarprognoseId) {
-        const url = `${this.apiEndpoint}?access-token=${this.config.accessToken}&project=${this.config.project}&item=${this.config.solarprognoseItem}&id=${this.config.solarprognoseId}&algorithm=${this.config.solarprognoseAlgorithm}&type=hourly&_format=json`;
-        const response = await this.downloadData(url);
-        this.log.silly(JSON.stringify(response));
-        if (response) {
-          if (response.status === 0) {
-            await this.createOrUpdateState(this.namespace, myTypes.stateDefinition["statusResponse"], response.status, "statusResponse", true);
-            this.solarData = response.data;
-            await this.processData();
-            await this.updateCalcedEnergy();
-            await this.calcAccuracy();
+    /**
+     * Is called when adapter shuts down - callback has to be called under any circumstances!
+     */
+    onUnload(callback) {
+        try {
             if (this.updateSchedule)
-              this.updateSchedule.cancel();
-            nextUpdateTime = this.getNextUpdateTime(response.preferredNextApiRequestAt);
-            await this.createOrUpdateState(this.namespace, myTypes.stateDefinition["lastUpdate"], (0, import_moment.default)().format(`ddd ${this.dateFormat} HH:mm:ss`), "lastUpdate");
-            this.log.info(`${logPrefix} data successfully updated, next update: ${nextUpdateTime.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
-          } else {
-            this.log.error(`${logPrefix} data received with error code: ${response.status} - ${myTypes.stateDefinition.statusResponse.common.states[response.status]}`);
-          }
-        } else {
-          this.log.error(`${logPrefix} no data received!`);
+                this.updateSchedule.cancel();
+            if (this.hourlySchedule)
+                this.hourlySchedule.cancel();
+            if (this.interpolationSchedule)
+                this.interpolationSchedule.cancel();
+            callback();
+            // eslint-disable-next-line
         }
-      } else {
-        this.log.error(`${logPrefix} settings missing. Please check your adapter configuration!`);
-      }
-    } catch (error) {
-      this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+        catch (e) {
+            callback();
+        }
     }
-    if (nextUpdateTime) {
-      this.updateSchedule = schedule.scheduleJob(nextUpdateTime.toDate(), async () => {
-        this.updateData();
-      });
-    } else {
-      this.log.warn(`${logPrefix} no next update time receive, try again in 1 hour`);
-      this.updateSchedule = schedule.scheduleJob((0, import_moment.default)().add(1, "hours").toDate(), async () => {
-        this.updateData();
-      });
-    }
-  }
-  async processData() {
-    const logPrefix = "[processData]:";
-    try {
-      if (this.solarData) {
-        const jsonResult = [];
-        for (let i = 0; i <= Object.keys(this.solarData).length - 1; i++) {
-          const timestamp = parseInt(Object.keys(this.solarData)[i]);
-          const momentTs = (0, import_moment.default)(timestamp * 1e3);
-          const arr = Object.values(this.solarData)[i];
-          if (!momentTs.isBefore((0, import_moment.default)().startOf("day"))) {
-            const diffDays = momentTs.diff((0, import_moment.default)().startOf("day"), "days");
-            const channelDayId = `${myHelper.zeroPad(diffDays, 2)}`;
-            const channelHourId = `${myHelper.zeroPad(momentTs.hours(), 2)}h`;
-            if (diffDays <= this.config.dailyMax) {
-              jsonResult.push({
-                human: momentTs.format(`ddd ${this.dateFormat} HH:mm`),
-                timestamp,
-                val: arr[0],
-                total: arr[1]
-              });
+    /**
+     * Is called if a subscribed state changes
+     */
+    async onStateChange(id, state) {
+        if (state) {
+            if (id = this.config.todayEnergyObject) {
+                // this.updateCalcedEnergy();
+                // this.calcAccuracy();
             }
-            if (this.config.dailyEnabled && diffDays <= this.config.dailyMax) {
-              if (!Object.keys(this.solarData)[i + 1] || Object.keys(this.solarData)[i + 1] && !momentTs.isSame((0, import_moment.default)(parseInt(Object.keys(this.solarData)[i + 1]) * 1e3), "day")) {
-                await this.createOrUpdateChannel(channelDayId, diffDays === 0 ? this.getTranslation("today") : diffDays === 1 ? this.getTranslation("tomorrow") : this.getTranslation("inXDays").replace("{0}", diffDays.toString()));
-                await this.createOrUpdateState(channelDayId, myTypes.stateDefinition["energy"], arr[1], "energy");
-              }
-            } else {
-              if (this.config.dailyEnabled && diffDays <= this.config.dailyMax) {
-                if (await this.objectExists(`${channelDayId}.${myTypes.stateDefinition["energy"].id}`)) {
-                  await this.delObjectAsync(`${channelDayId}.${myTypes.stateDefinition["energy"].id}`);
-                  this.log.info(`${logPrefix} deleting state '${channelDayId}.${myTypes.stateDefinition["energy"].id}' (config.dailyEnabled: ${this.config.hourlyEnabled}, config.hourlyEnabled: ${this.config.hourlyEnabled})`);
+            // The state was changed
+            // this.log.info(`state ${id} changed: ${state.val} (ack = ${state.ack})`);
+        }
+        else {
+            // The state was deleted
+            // this.log.info(`state ${id} deleted`);
+        }
+    }
+    async updateData(isAdapterStart = false) {
+        const logPrefix = '[updateData]:';
+        try {
+            const result = await this.spApi.getHourlyData();
+            if (result) {
+                const myData = this.transformData(result);
+                this.log.warn(JSON.stringify(myData));
+                this.myIob.createOrUpdateStates(this.namespace, tree.prognose.get(), myData, myData, undefined, false, undefined, true);
+            }
+        }
+        catch (error) {
+            this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+        }
+    }
+    transformData(progData) {
+        const logPrefix = '[updateData]:';
+        try {
+            let result = [];
+            const json = [];
+            const groupedByDate = {};
+            if (progData.data) {
+                for (const [timestampStr, [power, energy]] of Object.entries(progData.data)) {
+                    const timestamp = parseInt(timestampStr) * 1000;
+                    const momentTs = moment(timestamp);
+                    const timeStr = momentTs.format(`ddd ${this.dateFormat} HH:mm:ss`);
+                    const day = momentTs.startOf('day').unix();
+                    const diffDays = momentTs.diff(moment().startOf('day'), 'days');
+                    if (diffDays <= this.config.dailyMax) {
+                        if (!groupedByDate[day]) {
+                            groupedByDate[day] = [];
+                        }
+                        groupedByDate[day].push({ human: timeStr, timestamp, power, energy });
+                        if (this.config.jsonTableEnabled) {
+                            json.push({ human: timeStr, timestamp, power, energy });
+                        }
+                    }
                 }
-                if (await this.objectExists(`${channelDayId}.${myTypes.stateDefinition["energy_now"].id}`)) {
-                  await this.delObjectAsync(`${channelDayId}.${myTypes.stateDefinition["energy_now"].id}`);
-                  this.log.info(`${logPrefix} deleting state '${channelDayId}.${myTypes.stateDefinition["energy_now"].id}' (config.dailyEnabled: ${this.config.hourlyEnabled}, config.hourlyEnabled: ${this.config.hourlyEnabled})`);
+                const sortedDays = Object.keys(groupedByDate)
+                    .map(Number)
+                    .sort((a, b) => a - b);
+                result = sortedDays.map(day => {
+                    const hourlySorted = groupedByDate[day].sort((a, b) => a.timestamp - b.timestamp);
+                    const lastEnergy = hourlySorted.length > 0 ? hourlySorted[hourlySorted.length - 1].energy : null;
+                    const result = {
+                        energy: lastEnergy,
+                        hourly: hourlySorted,
+                    };
+                    if (day === moment().startOf('day').unix()) {
+                        // Today data
+                        const nowTimestamp = moment().startOf('hour').unix() * 1000;
+                        if (nowTimestamp < hourlySorted[0].timestamp) {
+                            // before first entry of day
+                            result.energy_now = 0;
+                            result.energy_from_now = lastEnergy;
+                        }
+                        else if (nowTimestamp > hourlySorted[hourlySorted.length - 1].timestamp) {
+                            // after last entry of day
+                            result.energy_now = lastEnergy;
+                            result.energy_from_now = 0;
+                        }
+                        else {
+                            // between first and last entry of day
+                            const hourNow = hourlySorted.find(x => x.timestamp === moment().startOf('hour').unix() * 1000);
+                            if (hourNow) {
+                                const hourNext = hourlySorted[hourlySorted.indexOf(hourNow) + 1];
+                                if (hourNext && this.config.dailyInterpolation) {
+                                    const energyNow = Math.round((hourNow.energy + (hourNext.energy - hourNow.energy) / 60 * moment().minutes()) * 1000) / 1000;
+                                    result.energy_now = energyNow;
+                                    result.energy_from_now = lastEnergy - energyNow;
+                                }
+                                else {
+                                    result.energy_now = hourNow.energy;
+                                    result.energy_from_now = lastEnergy - hourNow.energy;
+                                }
+                            }
+                            else {
+                                this.log.error(`${logPrefix} data for current hour not found!`);
+                            }
+                        }
+                    }
+                    return result;
+                });
+            }
+            return {
+                forecast: result,
+                json: json.sort((a, b) => a.timestamp - b.timestamp),
+                status: progData.status,
+                lastUpdate: moment().startOf('hour').unix() * 1000
+            };
+        }
+        catch (error) {
+            this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+        }
+        return undefined;
+    }
+    // private async updateData(): Promise<void> {
+    // 	const logPrefix = '[updateData]:';
+    // 	let nextUpdateTime = undefined;
+    // 	try {
+    // 		if (this.config.project && this.config.accessToken && this.config.solarprognoseItem && this.config.solarprognoseId) {
+    // 			const url = `${this.apiEndpoint}?access-token=${this.config.accessToken}&project=${this.config.project}&item=${this.config.solarprognoseItem}&id=${this.config.solarprognoseId}&algorithm=${this.config.solarprognoseAlgorithm}&type=hourly&_format=json`;
+    // 			const response = await this.downloadData(url);
+    // 			this.log.silly(JSON.stringify(response));
+    // 			if (response) {
+    // 				if (response.status === 0) {
+    // 					await this.createOrUpdateState(this.namespace, myTypes.stateDefinition['statusResponse'], response.status, 'statusResponse', true);
+    // 					this.solarData = response.data;
+    // 					await this.processData();
+    // 					await this.updateCalcedEnergy();
+    // 					await this.calcAccuracy();
+    // 					if (this.updateSchedule) this.updateSchedule.cancel()
+    // 					nextUpdateTime = this.getNextUpdateTime(response.preferredNextApiRequestAt);
+    // 					await this.createOrUpdateState(this.namespace, myTypes.stateDefinition['lastUpdate'], moment().format(`ddd ${this.dateFormat} HH:mm:ss`), 'lastUpdate');
+    // 					this.log.info(`${logPrefix} data successfully updated, next update: ${nextUpdateTime.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
+    // 				} else {
+    // 					//@ts-ignore
+    // 					this.log.error(`${logPrefix} data received with error code: ${response.status} - ${myTypes.stateDefinition.statusResponse.common.states[response.status]}`);
+    // 				}
+    // 			} else {
+    // 				this.log.error(`${logPrefix} no data received!`);
+    // 			}
+    // 		} else {
+    // 			this.log.error(`${logPrefix} settings missing. Please check your adapter configuration!`);
+    // 		}
+    // 	} catch (error: any) {
+    // 		this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+    // 	}
+    // 	if (nextUpdateTime) {
+    // 		this.updateSchedule = schedule.scheduleJob(nextUpdateTime.toDate(), async () => {
+    // 			this.updateData();
+    // 		});
+    // 	} else {
+    // 		this.log.warn(`${logPrefix} no next update time receive, try again in 1 hour`);
+    // 		this.updateSchedule = schedule.scheduleJob(moment().add(1, 'hours').toDate(), async () => {
+    // 			this.updateData();
+    // 		});
+    // 	}
+    // }
+    // private async processData(): Promise<void> {
+    // 	const logPrefix = '[processData]:';
+    // 	try {
+    // 		if (this.solarData) {
+    // 			const jsonResult: Array<myTypes.myJsonStructure> = [];
+    // 			for (let i = 0; i <= Object.keys(this.solarData).length - 1; i++) {
+    // 				const timestamp = parseInt(Object.keys(this.solarData)[i]);
+    // 				const momentTs = moment(timestamp * 1000);
+    // 				const arr = Object.values(this.solarData)[i];
+    // 				if (!momentTs.isBefore(moment().startOf('day'))) {
+    // 					// filter out past data
+    // 					const diffDays = momentTs.diff(moment().startOf('day'), 'days');
+    // 					const channelDayId = `${myHelper.zeroPad(diffDays, 2)}`;
+    // 					const channelHourId = `${myHelper.zeroPad(momentTs.hours(), 2)}h`
+    // 					if (diffDays <= this.config.dailyMax) {
+    // 						jsonResult.push({
+    // 							human: momentTs.format(`ddd ${this.dateFormat} HH:mm`),
+    // 							timestamp: timestamp,
+    // 							val: arr[0],
+    // 							total: arr[1]
+    // 						});
+    // 					}
+    // 					if (this.config.dailyEnabled && diffDays <= this.config.dailyMax) {
+    // 						if (!Object.keys(this.solarData)[i + 1] || (Object.keys(this.solarData)[i + 1] && !momentTs.isSame(moment(parseInt(Object.keys(this.solarData)[i + 1]) * 1000), 'day'))) {
+    // 							await this.createOrUpdateChannel(channelDayId, diffDays === 0 ? this.getTranslation('today') : diffDays === 1 ? this.getTranslation('tomorrow') : this.getTranslation('inXDays').replace('{0}', diffDays.toString()));
+    // 							await this.createOrUpdateState(channelDayId, myTypes.stateDefinition['energy'], arr[1], 'energy');
+    // 						}
+    // 					} else {
+    // 						if (this.config.dailyEnabled && diffDays <= this.config.dailyMax) {
+    // 							if (await this.objectExists(`${channelDayId}.${myTypes.stateDefinition['energy'].id}`)) {
+    // 								await this.delObjectAsync(`${channelDayId}.${myTypes.stateDefinition['energy'].id}`);
+    // 								this.log.info(`${logPrefix} deleting state '${channelDayId}.${myTypes.stateDefinition['energy'].id}' (config.dailyEnabled: ${this.config.hourlyEnabled}, config.hourlyEnabled: ${this.config.hourlyEnabled})`);
+    // 							}
+    // 							if (await this.objectExists(`${channelDayId}.${myTypes.stateDefinition['energy_now'].id}`)) {
+    // 								await this.delObjectAsync(`${channelDayId}.${myTypes.stateDefinition['energy_now'].id}`);
+    // 								this.log.info(`${logPrefix} deleting state '${channelDayId}.${myTypes.stateDefinition['energy_now'].id}' (config.dailyEnabled: ${this.config.hourlyEnabled}, config.hourlyEnabled: ${this.config.hourlyEnabled})`);
+    // 							}
+    // 							if (await this.objectExists(`${channelDayId}.${myTypes.stateDefinition['energy_from_now'].id}`)) {
+    // 								await this.delObjectAsync(`${channelDayId}.${myTypes.stateDefinition['energy_from_now'].id}`);
+    // 								this.log.info(`${logPrefix} deleting state '${channelDayId}.${myTypes.stateDefinition['energy_from_now'].id}' (config.dailyEnabled: ${this.config.hourlyEnabled}, config.hourlyEnabled: ${this.config.hourlyEnabled})`);
+    // 							}
+    // 						} else {
+    // 							if (await this.objectExists(`${channelDayId}`)) {
+    // 								await this.delObjectAsync(`${channelDayId}`, { recursive: true });
+    // 								this.log.info(`${logPrefix} deleting channel '${channelDayId}' (config.dailyEnabled: ${this.config.hourlyEnabled}, config.hourlyEnabled: ${this.config.hourlyEnabled})`);
+    // 							}
+    // 						}
+    // 					}
+    // 					if (this.config.hourlyEnabled && diffDays <= this.config.dailyMax) {
+    // 						await this.createOrUpdateChannel(`${channelDayId}.${channelHourId}`, this.getTranslation('xOClock').replace('{0}', momentTs.hour().toString()));
+    // 						await this.createOrUpdateState(`${channelDayId}.${channelHourId}`, myTypes.stateDefinition['date'], momentTs.format(`ddd ${this.dateFormat} HH:mm`), 'date');
+    // 						await this.createOrUpdateState(`${channelDayId}.${channelHourId}`, myTypes.stateDefinition['power'], arr[0], 'power');
+    // 						await this.createOrUpdateState(`${channelDayId}.${channelHourId}`, myTypes.stateDefinition['energy'], arr[1], 'energy');
+    // 					} else {
+    // 						if (await this.objectExists(`${channelDayId}.${channelHourId}`)) {
+    // 							await this.delObjectAsync(`${channelDayId}.${channelHourId}`, { recursive: true });
+    // 							this.log.info(`${logPrefix} deleting channel '${channelDayId}.${channelHourId}' (config.hourlyEnabled: ${this.config.hourlyEnabled})`);
+    // 						}
+    // 					}
+    // 				}
+    // 			}
+    // 			if (this.config.jsonTableEnabled) {
+    // 				await this.createOrUpdateState(this.namespace, myTypes.stateDefinition['jsonTable'], JSON.stringify(jsonResult), 'jsonTable');
+    // 			} else {
+    // 				if (myTypes.stateDefinition['jsonTable'].id && await this.objectExists(myTypes.stateDefinition['jsonTable'].id)) {
+    // 					await this.delObjectAsync(myTypes.stateDefinition['jsonTable'].id);
+    // 					this.log.info(`${logPrefix} deleting state '${myTypes.stateDefinition['jsonTable'].id}' (config.jsonTableEnabled: ${this.config.jsonTableEnabled})`);
+    // 				}
+    // 			}
+    // 		} else {
+    // 			this.log.error(`${logPrefix} received data has no forecast data!`);
+    // 		}
+    // 	} catch (error: any) {
+    // 		this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+    // 	}
+    // }
+    // private async updateCalcedEnergy(): Promise<void> {
+    // 	const logPrefix = '[updateCalcedEnergy]:';
+    // 	try {
+    // 		if (this.config.dailyEnabled) {
+    // 			const nowTs = moment().startOf('hour').unix();
+    // 			const nextHourTs = moment().startOf('hour').add(1, 'hour').unix();
+    // 			const idEnergy = `00.${myTypes.stateDefinition['energy'].id}`
+    // 			if (await this.objectExists(idEnergy)) {
+    // 				const energyTotalToday = await this.getStateAsync(idEnergy);
+    // 				if (this.solarData && this.solarData[nowTs]) {
+    // 					if (energyTotalToday && (energyTotalToday.val || energyTotalToday.val === 0)) {
+    // 						let energyNow = this.solarData[nowTs][1];
+    // 						if (this.config.dailyInterpolation && this.solarData[nextHourTs]) {
+    // 							energyNow = Math.round((this.solarData[nowTs][1] + (this.solarData[nextHourTs][1] - this.solarData[nowTs][1]) / 60 * moment().minutes()) * 1000) / 1000;
+    // 							this.log.debug(`${logPrefix} update energy_now with interpolation: ${energyNow} kWh (energy now: ${this.solarData[nowTs][1]}, energy next: ${this.solarData[nextHourTs][1]}, minutes: ${moment().minutes()}))`)
+    // 						} else {
+    // 							this.log.debug(`${logPrefix} update energy_now: ${energyNow} kWh (energy now: ${this.solarData[nowTs][1]})`);
+    // 						}
+    // 						await this.createOrUpdateState('00', myTypes.stateDefinition['energy_now'], energyNow, 'energy_now');
+    // 						await this.createOrUpdateState('00', myTypes.stateDefinition['energy_from_now'], Math.round(((energyTotalToday.val as number) - energyNow) * 1000) / 1000, 'energy_from_now');
+    // 					}
+    // 				} else {
+    // 					await this.createOrUpdateState('00', myTypes.stateDefinition['energy_now'], (energyTotalToday?.val as number), 'energy_now');
+    // 					await this.createOrUpdateState('00', myTypes.stateDefinition['energy_from_now'], 0, 'energy_from_now');
+    // 				}
+    // 			}
+    // 		}
+    // 	} catch (error: any) {
+    // 		this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+    // 	}
+    // }
+    // private async calcAccuracy(): Promise<void> {
+    // 	const logPrefix = '[calcAccuracy]:';
+    // 	try {
+    // 		if (this.config.dailyEnabled && this.config.accuracyEnabled && this.config.todayEnergyObject && (await this.foreignObjectExists(this.config.todayEnergyObject))) {
+    // 			if (moment().hour() === 0) {
+    // 				// reset at day change
+    // 				await this.createOrUpdateState(`${this.namespace}.00`, myTypes.stateDefinition['accuracy'], 0, 'accuracy');
+    // 				this.log.debug(`${logPrefix} reset accuracy because of new day started`);
+    // 			} else {
+    // 				const idEnergy = `00.${myTypes.stateDefinition['energy_now'].id}`
+    // 				if ((await this.foreignObjectExists(this.config.todayEnergyObject)) && (await this.objectExists(idEnergy))) {
+    // 					const forecastEnergy = await this.getStateAsync(idEnergy);
+    // 					const todayEnergy = await this.getForeignStateAsync(this.config.todayEnergyObject);
+    // 					if (forecastEnergy && forecastEnergy.val && todayEnergy && (todayEnergy.val || todayEnergy.val === 0)) {
+    // 						const res = Math.round((todayEnergy.val as number) / (forecastEnergy.val as number) * 100) / 100;
+    // 						this.log.debug(`${logPrefix} new accuracy: ${res} (energy now: ${forecastEnergy.val}, energyToday: ${todayEnergy.val}) `);
+    // 						await this.createOrUpdateState(`${this.namespace}.00`, myTypes.stateDefinition['accuracy'], res, 'accuracy');
+    // 					}
+    // 				}
+    // 			}
+    // 		}
+    // 	} catch (error: any) {
+    // 		this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+    // 	}
+    // }
+    // private async downloadData(url: string): Promise<myTypes.dataStructure | undefined> {
+    // 	const logPrefix = '[downloadData]:';
+    // 	try {
+    // 		if (!this.testMode) {
+    // 			const response: any = await fetch(url);
+    // 			if (response.status === 200) {
+    // 				this.log.debug(`${logPrefix} data successfully received`);
+    // 				return await response.json();
+    // 			} else {
+    // 				this.log.error(`${logPrefix} status code: ${response.status}`);
+    // 			}
+    // 		} else {
+    // 			this.log.warn(`${logPrefix} Test mode is active!`);
+    // 			const { default: data } = await import('../test/testData.json', { assert: { type: 'json' } });
+    // 			return data;
+    // 		}
+    // 	} catch (error: any) {
+    // 		this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+    // 	}
+    // 	return undefined;
+    // }
+    getNextUpdateTime(preferredNextApiRequestAt) {
+        const logPrefix = '[getNextUpdateTime]:';
+        let nextUpdate = moment().add(1, 'hours');
+        try {
+            if (preferredNextApiRequestAt && preferredNextApiRequestAt.epochTimeUtc) {
+                const nextApiRequestLog = moment(preferredNextApiRequestAt.epochTimeUtc * 1000).format(`ddd ${this.dateFormat} HH:mm:ss`);
+                if (!moment().isBefore(moment(preferredNextApiRequestAt.epochTimeUtc * 1000))) {
+                    // 'preferredNextApiRequestAt' is in the past
+                    this.log.debug(`${logPrefix} preferredNextApiRequestAt: '${nextApiRequestLog}' is in the past! Next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
                 }
-                if (await this.objectExists(`${channelDayId}.${myTypes.stateDefinition["energy_from_now"].id}`)) {
-                  await this.delObjectAsync(`${channelDayId}.${myTypes.stateDefinition["energy_from_now"].id}`);
-                  this.log.info(`${logPrefix} deleting state '${channelDayId}.${myTypes.stateDefinition["energy_from_now"].id}' (config.dailyEnabled: ${this.config.hourlyEnabled}, config.hourlyEnabled: ${this.config.hourlyEnabled})`);
+                else if ((moment(preferredNextApiRequestAt.epochTimeUtc * 1000).diff(moment()) / (1000 * 60 * 60)) >= 1.1) {
+                    // 'preferredNextApiRequestAt' is more than one hour in the future
+                    this.log.debug(`${logPrefix} preferredNextApiRequestAt: '${nextApiRequestLog}' is more than one hour in the future! Next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
                 }
-              } else {
-                if (await this.objectExists(`${channelDayId}`)) {
-                  await this.delObjectAsync(`${channelDayId}`, { recursive: true });
-                  this.log.info(`${logPrefix} deleting channel '${channelDayId}' (config.dailyEnabled: ${this.config.hourlyEnabled}, config.hourlyEnabled: ${this.config.hourlyEnabled})`);
+                else {
+                    // using 'preferredNextApiRequestAt'
+                    nextUpdate = moment(preferredNextApiRequestAt.epochTimeUtc * 1000);
+                    this.log.debug(`${logPrefix} next update: ${moment(preferredNextApiRequestAt.epochTimeUtc * 1000).format(`ddd ${this.dateFormat} HH:mm:ss`)} by 'preferredNextApiRequestAt'`);
                 }
-              }
             }
-            if (this.config.hourlyEnabled && diffDays <= this.config.dailyMax) {
-              await this.createOrUpdateChannel(`${channelDayId}.${channelHourId}`, this.getTranslation("xOClock").replace("{0}", momentTs.hour().toString()));
-              await this.createOrUpdateState(`${channelDayId}.${channelHourId}`, myTypes.stateDefinition["date"], momentTs.format(`ddd ${this.dateFormat} HH:mm`), "date");
-              await this.createOrUpdateState(`${channelDayId}.${channelHourId}`, myTypes.stateDefinition["power"], arr[0], "power");
-              await this.createOrUpdateState(`${channelDayId}.${channelHourId}`, myTypes.stateDefinition["energy"], arr[1], "energy");
-            } else {
-              if (await this.objectExists(`${channelDayId}.${channelHourId}`)) {
-                await this.delObjectAsync(`${channelDayId}.${channelHourId}`, { recursive: true });
-                this.log.info(`${logPrefix} deleting channel '${channelDayId}.${channelHourId}' (config.hourlyEnabled: ${this.config.hourlyEnabled})`);
-              }
+            else {
+                this.log.debug(`${logPrefix} no 'preferredNextApiRequestAt' exist, next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
             }
-          }
         }
-        if (this.config.jsonTableEnabled) {
-          await this.createOrUpdateState(this.namespace, myTypes.stateDefinition["jsonTable"], JSON.stringify(jsonResult), "jsonTable");
-        } else {
-          if (myTypes.stateDefinition["jsonTable"].id && await this.objectExists(myTypes.stateDefinition["jsonTable"].id)) {
-            await this.delObjectAsync(myTypes.stateDefinition["jsonTable"].id);
-            this.log.info(`${logPrefix} deleting state '${myTypes.stateDefinition["jsonTable"].id}' (config.jsonTableEnabled: ${this.config.jsonTableEnabled})`);
-          }
+        catch (err) {
+            console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
         }
-      } else {
-        this.log.error(`${logPrefix} received data has no forecast data!`);
-      }
-    } catch (error) {
-      this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
+        return nextUpdate;
     }
-  }
-  async updateCalcedEnergy() {
-    const logPrefix = "[updateCalcedEnergy]:";
-    try {
-      if (this.config.dailyEnabled) {
-        const nowTs = (0, import_moment.default)().startOf("hour").unix();
-        const nextHourTs = (0, import_moment.default)().startOf("hour").add(1, "hour").unix();
-        const idEnergy = `00.${myTypes.stateDefinition["energy"].id}`;
-        if (await this.objectExists(idEnergy)) {
-          const energyTotalToday = await this.getStateAsync(idEnergy);
-          if (this.solarData && this.solarData[nowTs]) {
-            if (energyTotalToday && (energyTotalToday.val || energyTotalToday.val === 0)) {
-              let energyNow = this.solarData[nowTs][1];
-              if (this.config.dailyInterpolation && this.solarData[nextHourTs]) {
-                energyNow = Math.round((this.solarData[nowTs][1] + (this.solarData[nextHourTs][1] - this.solarData[nowTs][1]) / 60 * (0, import_moment.default)().minutes()) * 1e3) / 1e3;
-                this.log.debug(`${logPrefix} update energy_now with interpolation: ${energyNow} kWh (energy now: ${this.solarData[nowTs][1]}, energy next: ${this.solarData[nextHourTs][1]}, minutes: ${(0, import_moment.default)().minutes()}))`);
-              } else {
-                this.log.debug(`${logPrefix} update energy_now: ${energyNow} kWh (energy now: ${this.solarData[nowTs][1]})`);
-              }
-              await this.createOrUpdateState("00", myTypes.stateDefinition["energy_now"], energyNow, "energy_now");
-              await this.createOrUpdateState("00", myTypes.stateDefinition["energy_from_now"], Math.round((energyTotalToday.val - energyNow) * 1e3) / 1e3, "energy_from_now");
-            }
-          } else {
-            await this.createOrUpdateState("00", myTypes.stateDefinition["energy_now"], energyTotalToday == null ? void 0 : energyTotalToday.val, "energy_now");
-            await this.createOrUpdateState("00", myTypes.stateDefinition["energy_from_now"], 0, "energy_from_now");
-          }
-        }
-      }
-    } catch (error) {
-      this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
-    }
-  }
-  async calcAccuracy() {
-    const logPrefix = "[calcAccuracy]:";
-    try {
-      if (this.config.dailyEnabled && this.config.accuracyEnabled && this.config.todayEnergyObject && await this.foreignObjectExists(this.config.todayEnergyObject)) {
-        if ((0, import_moment.default)().hour() === 0) {
-          await this.createOrUpdateState(`${this.namespace}.00`, myTypes.stateDefinition["accuracy"], 0, "accuracy");
-          this.log.debug(`${logPrefix} reset accuracy because of new day started`);
-        } else {
-          const idEnergy = `00.${myTypes.stateDefinition["energy_now"].id}`;
-          if (await this.foreignObjectExists(this.config.todayEnergyObject) && await this.objectExists(idEnergy)) {
-            const forecastEnergy = await this.getStateAsync(idEnergy);
-            const todayEnergy = await this.getForeignStateAsync(this.config.todayEnergyObject);
-            if (forecastEnergy && forecastEnergy.val && todayEnergy && (todayEnergy.val || todayEnergy.val === 0)) {
-              const res = Math.round(todayEnergy.val / forecastEnergy.val * 100) / 100;
-              this.log.debug(`${logPrefix} new accuracy: ${res} (energy now: ${forecastEnergy.val}, energyToday: ${todayEnergy.val}) `);
-              await this.createOrUpdateState(`${this.namespace}.00`, myTypes.stateDefinition["accuracy"], res, "accuracy");
-            }
-          }
-        }
-      }
-    } catch (error) {
-      this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
-    }
-  }
-  async downloadData(url) {
-    const logPrefix = "[downloadData]:";
-    try {
-      if (!this.testMode) {
-        const response = await fetch(url);
-        if (response.status === 200) {
-          this.log.debug(`${logPrefix} data successfully received`);
-          return await response.json();
-        } else {
-          this.log.error(`${logPrefix} status code: ${response.status}`);
-        }
-      } else {
-        this.log.warn(`${logPrefix} Test mode is active!`);
-        const { default: data } = await Promise.resolve().then(() => __toESM(require("../test/testData.json")));
-        return data;
-      }
-    } catch (error) {
-      this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
-    }
-    return void 0;
-  }
-  async createOrUpdateState(idChannel, stateDef, val, key, forceUpdate = false) {
-    const logPrefix = "[createOrUpdateState]:";
-    try {
-      const id = `${idChannel}.${stateDef.id}`;
-      if (stateDef.common) {
-        stateDef.common.name = this.getTranslation(key);
-        if (stateDef.common.unit && Object.prototype.hasOwnProperty.call(this.config, stateDef.common.unit)) {
-          stateDef.common.unit = this.getTranslation(this.config[stateDef.common.unit]) || stateDef.common.unit;
-        }
-        if (!await this.objectExists(id)) {
-          this.log.debug(`${logPrefix} creating state '${id}'`);
-          const obj = {
-            type: "state",
-            common: stateDef.common,
-            native: {}
-          };
-          await this.setObjectAsync(id, obj);
-        } else {
-          const obj = await this.getObjectAsync(id);
-          if (obj && obj.common) {
-            if (!myHelper.isStateCommonEqual(obj.common, stateDef.common)) {
-              await this.extendObject(id, { common: stateDef.common });
-              this.log.info(`${logPrefix} updated common properties of state '${id}'`);
-            }
-          }
-        }
-        if (forceUpdate) {
-          await this.setState(id, val, true);
-          this.log.silly(`${logPrefix} value of state '${id}' updated to ${val} (force: ${forceUpdate})`);
-          return true;
-        } else {
-          let changedObj = void 0;
-          changedObj = await this.setStateChangedAsync(id, val, true);
-          if (changedObj && Object.prototype.hasOwnProperty.call(changedObj, "notChanged") && !changedObj.notChanged) {
-            this.log.silly(`${logPrefix} value of state '${id}' changed to ${val}`);
-            return !changedObj.notChanged;
-          }
-        }
-      }
-    } catch (err) {
-      console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
-    }
-    return false;
-  }
-  async createOrUpdateChannel(id, name) {
-    const logPrefix = "[createOrUpdateChannel]:";
-    try {
-      const common = {
-        name
-        // icon: myDeviceImages[nvr.type] ? myDeviceImages[nvr.type] : null
-      };
-      if (!await this.objectExists(id)) {
-        this.log.debug(`${logPrefix} creating channel '${id}'`);
-        await this.setObjectAsync(id, {
-          type: "channel",
-          common,
-          native: {}
-        });
-      } else {
-        const obj = await this.getObjectAsync(id);
-        if (obj && obj.common) {
-          if (!myHelper.isChannelCommonEqual(obj.common, common)) {
-            await this.extendObject(id, { common });
-            this.log.info(`${logPrefix} channel updated '${id}'`);
-          }
-        }
-      }
-    } catch (error) {
-      this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
-    }
-  }
-  getNextUpdateTime(preferredNextApiRequestAt) {
-    const logPrefix = "[getNextUpdateTime]:";
-    let nextUpdate = (0, import_moment.default)().add(1, "hours");
-    try {
-      if (preferredNextApiRequestAt && preferredNextApiRequestAt.epochTimeUtc) {
-        const nextApiRequestLog = (0, import_moment.default)(preferredNextApiRequestAt.epochTimeUtc * 1e3).format(`ddd ${this.dateFormat} HH:mm:ss`);
-        if (!(0, import_moment.default)().isBefore((0, import_moment.default)(preferredNextApiRequestAt.epochTimeUtc * 1e3))) {
-          this.log.debug(`${logPrefix} preferredNextApiRequestAt: '${nextApiRequestLog}' is in the past! Next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
-        } else if ((0, import_moment.default)(preferredNextApiRequestAt.epochTimeUtc * 1e3).diff((0, import_moment.default)()) / (1e3 * 60 * 60) >= 1.1) {
-          this.log.debug(`${logPrefix} preferredNextApiRequestAt: '${nextApiRequestLog}' is more than one hour in the future! Next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
-        } else {
-          nextUpdate = (0, import_moment.default)(preferredNextApiRequestAt.epochTimeUtc * 1e3);
-          this.log.debug(`${logPrefix} next update: ${(0, import_moment.default)(preferredNextApiRequestAt.epochTimeUtc * 1e3).format(`ddd ${this.dateFormat} HH:mm:ss`)} by 'preferredNextApiRequestAt'`);
-        }
-      } else {
-        this.log.debug(`${logPrefix} no 'preferredNextApiRequestAt' exist, next update: ${nextUpdate.format(`ddd ${this.dateFormat} HH:mm:ss`)}`);
-      }
-    } catch (err) {
-      console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
-    }
-    return nextUpdate;
-  }
-  async loadTranslation() {
-    const logPrefix = "[loadTranslation]:";
-    try {
-      import_moment.default.locale(this.language || "en");
-      const fileName = `../admin/i18n/${this.language || "en"}/translations.json`;
-      this.myTranslation = (await Promise.resolve().then(() => __toESM(require(fileName)))).default;
-      this.log.debug(`${logPrefix} translation data loaded from '${fileName}'`);
-    } catch (err) {
-      console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
-    }
-  }
-  getTranslation(str) {
-    const logPrefix = "[getTranslation]:";
-    try {
-      if (this.myTranslation && this.myTranslation[str]) {
-        return this.myTranslation[str];
-      } else {
-        this.log.warn(`${logPrefix} no translation for key '${str}' exists!`);
-      }
-    } catch (err) {
-      console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
-    }
-    return str;
-  }
 }
-if (require.main !== module) {
-  module.exports = (options) => new Solarprognose(options);
-} else {
-  (() => new Solarprognose())();
+// replace only needed for dev system
+const modulePath = url.fileURLToPath(import.meta.url).replace('/development/', '/node_modules/');
+if (process.argv[1] === modulePath) {
+    // start the instance directly
+    new Solarprognose();
 }
-//# sourceMappingURL=main.js.map
+export default function startAdapter(options) {
+    // compact mode
+    return new Solarprognose(options);
+}

@@ -4,6 +4,10 @@
 		"noImplicitAny": false
 	},
 	"include": [
-		"./**/*.js"
+		"./**/*.js",
+		"unit.cjs",
+		"package.cjs",
+		"integration.cjs",
+		"mocha.setup.cjs"
 	]
 }
