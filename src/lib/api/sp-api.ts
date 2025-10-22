@@ -143,7 +143,7 @@ export class SpApi {
 
 
     public getApiEndpoint(endpoint: ApiEndpoints, param: string = undefined): string {
-        let endpointPrefix = 'https://www.solarprognose.de/web/solarprediction/api/v1';
+        const endpointPrefix = 'https://www.solarprognose.de/web/solarprediction/api/v1';
         let endpointSuffix: string;
 
         switch (endpoint) {

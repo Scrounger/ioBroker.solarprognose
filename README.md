@@ -31,6 +31,7 @@ In the api settings of solarprgnose.de you have to do the following:
 
 ### **WORK IN PROGRESS**
 
+- (Scrounger) !!! breaking changes - states structure has been completely revised !!!
 - (Scrounger) dependencies updated
 - (Scrounger) node minimum set to 20
 - (Scrounger) converted to esm

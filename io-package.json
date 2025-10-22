@@ -131,6 +131,48 @@
       {
         "admin": ">=7.6.17"
       }
+    ],
+    "messages": [
+      {
+        "condition": {
+          "operand": "and",
+          "rules": [
+            "oldVersion<=1.2.2",
+            "newVersion>=2.0.0"
+          ]
+        },
+        "title": {
+          "en": "Important notice",
+          "de": "Wichtiger Hinweis",
+          "ru": "Важное замечание",
+          "pt": "Notícia importante",
+          "nl": "Belangrijke mededeling",
+          "fr": "Avis important",
+          "it": "Avviso IMPORTANTE",
+          "es": "¡Noticia importante",
+          "pl": "Ważna uwaga",
+          "uk": "Важливе повідомлення",
+          "zh-cn": "重要的提醒！ zigbee2mqtt 2.0"
+        },
+        "text": {
+          "en": "This new version has been completely revised.\\nBefore installation, all adapter states should be deleted or the adapter should be completely uninstalled.",
+          "de": "Diese neue Version wurde komplett überarbeitet.\\nVor der Installation sollten alle Adapterzustände gelöscht werden oder der Adapter komplett deinstalliert werden.",
+          "ru": "Эта новая версия была полностью переработана.\\nПеред установкой необходимо удалить все состояния адаптера или полностью деинсталлировать его.",
+          "pt": "Esta nova versão foi completamente revista.\\nAntes da instalação, todos os estados do adaptador devem ser eliminados ou o adaptador deve ser completamente desinstalado.",
+          "nl": "Deze nieuwe versie is volledig herzien. Voor de installatie moeten alle adapterstatussen verwijderd worden of moet de adapter volledig gedeïnstalleerd worden.",
+          "fr": "Cette nouvelle version a été entièrement révisée. Avant l'installation, tous les états de l'adaptateur doivent être supprimés ou l'adaptateur doit être complètement désinstallé.",
+          "it": "Prima dell'installazione, tutti gli stati dell'adattatore devono essere cancellati o l'adattatore deve essere completamente disinstallato.",
+          "es": "Esta nueva versión ha sido completamente revisada.\\NAntes de la instalación, todos los estados del adaptador deben ser borrados o el adaptador debe ser completamente desinstalado.",
+          "pl": "Przed instalacją należy usunąć wszystkie stany adaptera lub całkowicie go odinstalować.",
+          "uk": "Цю нову версію було повністю перероблено.\\nПеред встановленням слід видалити всі стани адаптера або повністю видалити адаптер.",
+          "zh-cn": "This new version has been completely revised.\\nBefore installation, all adapter states should be deleted or the adapter should be completely uninstalled."
+        },
+        "level": "warn",
+        "buttons": [
+          "agree",
+          "cancel"
+        ]
+      }
     ]
   },
   "encryptedNative": [

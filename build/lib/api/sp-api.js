@@ -92,7 +92,7 @@ export class SpApi {
         return (code !== undefined) && (code >= 200) && (code < 300);
     }
     getApiEndpoint(endpoint, param = undefined) {
-        let endpointPrefix = 'https://www.solarprognose.de/web/solarprediction/api/v1';
+        const endpointPrefix = 'https://www.solarprognose.de/web/solarprediction/api/v1';
         let endpointSuffix;
         switch (endpoint) {
             case ApiEndpoints.hourly:
