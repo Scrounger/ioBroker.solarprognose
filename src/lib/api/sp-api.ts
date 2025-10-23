@@ -179,6 +179,7 @@ export class SpApi {
             } else {
                 this.log.warn(`${logPrefix} Test mode is active!`);
 
+                // @ts-ignore
                 const data = await import('../../../test/testDataHourly.json', { assert: { type: 'json' } });
                 return data.default;
             }
