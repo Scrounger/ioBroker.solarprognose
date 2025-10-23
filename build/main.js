@@ -8,21 +8,20 @@ import url from 'node:url';
 import moment from 'moment';
 import * as schedule from 'node-schedule';
 import * as tree from './lib/tree/index.js';
+import * as myHelper from './lib/helper.js';
 import { myIob } from './lib/myIob.js';
 import { SpApi } from './lib/api/sp-api.js';
+import _ from 'lodash';
 class Solarprognose extends utils.Adapter {
     spApi;
     myIob;
     statesUsingValAsLastChanged = [
         'lastUpdate'
     ];
-    testMode = false;
-    apiEndpoint = 'https://www.solarprognose.de/web/solarprediction/api/v1';
+    cacheToday = [];
     updateSchedule = undefined;
-    hourlySchedule = undefined;
     interpolationSchedule = undefined;
-    solarData = undefined;
-    myTranslation;
+    testMode = false;
     constructor(options = {}) {
         super({
             ...options,
@@ -52,22 +51,20 @@ class Solarprognose extends utils.Adapter {
             else {
                 this.log.error(`${logPrefix} project, token, device id and / or access token missing. Please check your adapter configuration!`);
             }
-            // // Initialize your adapter here
-            // await this.loadTranslation();
-            // await this.updateData();
-            // if (this.config.dailyEnabled && this.config.accuracyEnabled && this.config.todayEnergyObject && (await this.foreignObjectExists(this.config.todayEnergyObject))) {
-            // 	await this.subscribeForeignStatesAsync(this.config.todayEnergyObject);
-            // }
-            // this.hourlySchedule = schedule.scheduleJob('0 * * * *', async () => {
-            // 	this.updateCalcedEnergy();
-            // 	this.calcAccuracy();
-            // });
-            // if (this.config.dailyInterpolation) {
-            // 	this.interpolationSchedule = schedule.scheduleJob('*/5 * * * *', async () => {
-            // 		this.updateCalcedEnergy();
-            // 		this.calcAccuracy();
-            // 	});
-            // }
+            if (this.config.dailyEnabled && this.config.accuracyEnabled && this.config.todayEnergyObject && (await this.foreignObjectExists(this.config.todayEnergyObject))) {
+                await this.subscribeForeignStatesAsync(this.config.todayEnergyObject);
+            }
+            if (this.config.dailyEnabled && this.config.dailyInterpolation) {
+                this.interpolationSchedule = schedule.scheduleJob('*/1 * * * *', async () => {
+                    await this.updateCalcedEnergyToday();
+                });
+            }
+            for (let i = this.config.dailyMax + 1; i <= 20; i++) {
+                const idChannel = `${tree.prognose.idChannel}.${myHelper.zeroPad(i, 2)}`;
+                if (await this.objectExists(idChannel)) {
+                    await this.delObjectAsync(idChannel, { recursive: true });
+                }
+            }
         }
         catch (error) {
             this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
@@ -75,17 +72,18 @@ class Solarprognose extends utils.Adapter {
     }
     /**
      * Is called when adapter shuts down - callback has to be called under any circumstances!
+     *
+     * @param callback
      */
     onUnload(callback) {
         try {
-            if (this.updateSchedule)
+            if (this.updateSchedule) {
                 this.updateSchedule.cancel();
-            if (this.hourlySchedule)
-                this.hourlySchedule.cancel();
-            if (this.interpolationSchedule)
+            }
+            if (this.interpolationSchedule) {
                 this.interpolationSchedule.cancel();
+            }
             callback();
-            // eslint-disable-next-line
         }
         catch (e) {
             callback();
@@ -93,21 +91,32 @@ class Solarprognose extends utils.Adapter {
     }
     /**
      * Is called if a subscribed state changes
+     *
+     * @param id
+     * @param state
      */
     async onStateChange(id, state) {
-        if (state) {
-            if (id = this.config.todayEnergyObject) {
-                // this.updateCalcedEnergy();
-                // this.calcAccuracy();
+        const logPrefix = '[onStateChange]:';
+        try {
+            if (state) {
+                if (state.from.includes(this.namespace)) {
+                    // internal changes
+                    await this.calcAccuracy();
+                }
+                else if (id === this.config.todayEnergyObject) {
+                    await this.calcAccuracy();
+                }
             }
-            // The state was changed
-            // this.log.info(`state ${id} changed: ${state.val} (ack = ${state.ack})`);
         }
-        else {
-            // The state was deleted
-            // this.log.info(`state ${id} deleted`);
+        catch (error) {
+            this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
         }
     }
+    /**
+     * Download and update the data
+     *
+     * @param isAdapterStart
+     */
     async updateData(isAdapterStart = false) {
         const logPrefix = '[updateData]:';
         let nextUpdateTime = undefined;
@@ -116,24 +125,21 @@ class Solarprognose extends utils.Adapter {
             if (result) {
                 const myData = this.transformData(result);
                 await this.myIob.createOrUpdateStates(this.namespace, tree.prognose.get(), myData, myData, undefined, false, undefined, isAdapterStart);
+                await this.calcAccuracy();
                 nextUpdateTime = this.getNextUpdateTime(result.preferredNextApiRequestAt);
             }
         }
         catch (error) {
             this.log.error(`${logPrefix} error: ${error}, stack: ${error.stack}`);
         }
-        if (nextUpdateTime) {
-            this.updateSchedule = schedule.scheduleJob(nextUpdateTime.toDate(), async () => {
-                this.updateData();
-            });
-        }
-        else {
-            this.log.warn(`${logPrefix} no next update time receive, try again in 1 hour`);
-            this.updateSchedule = schedule.scheduleJob(moment().add(1, 'hours').toDate(), async () => {
-                this.updateData();
-            });
-        }
+        this.nextPolling(nextUpdateTime);
     }
+    /**
+     * Transform downloaded data in an useful structure and enrich it with energy data's for today
+     *
+     * @param progData
+     * @returns
+     */
     transformData(progData) {
         const logPrefix = '[updateData]:';
         try {
@@ -147,7 +153,7 @@ class Solarprognose extends utils.Adapter {
                     const timeStr = momentTs.format(`ddd ${this.dateFormat} HH:mm:ss`);
                     const day = momentTs.startOf('day').unix();
                     const diffDays = momentTs.diff(moment().startOf('day'), 'days');
-                    if (diffDays <= this.config.dailyMax) {
+                    if (diffDays >= 0 && diffDays <= this.config.dailyMax) {
                         if (!groupedByDate[day]) {
                             groupedByDate[day] = [];
                         }
@@ -160,46 +166,23 @@ class Solarprognose extends utils.Adapter {
                 const sortedDays = Object.keys(groupedByDate)
                     .map(Number)
                     .sort((a, b) => a - b);
-                result = sortedDays.map(day => {
+                result = sortedDays.map((day) => {
                     const hourlySorted = groupedByDate[day].sort((a, b) => a.timestamp - b.timestamp);
                     const lastEnergy = hourlySorted.length > 0 ? hourlySorted[hourlySorted.length - 1].energy : null;
                     const result = {
                         energy: lastEnergy,
                         hourly: hourlySorted,
                     };
-                    if (day === moment().startOf('day').unix()) {
-                        // Today data
-                        const nowTimestamp = moment().startOf('hour').unix() * 1000;
-                        if (nowTimestamp < hourlySorted[0].timestamp) {
-                            // before first entry of day
-                            result.energy_now = 0;
-                            result.energy_from_now = lastEnergy;
-                        }
-                        else if (nowTimestamp > hourlySorted[hourlySorted.length - 1].timestamp) {
-                            // after last entry of day
-                            result.energy_now = lastEnergy;
-                            result.energy_from_now = 0;
-                        }
-                        else {
-                            // between first and last entry of day
-                            const hourNow = hourlySorted.find(x => x.timestamp === moment().startOf('hour').unix() * 1000);
-                            if (hourNow) {
-                                const hourNext = hourlySorted[hourlySorted.indexOf(hourNow) + 1];
-                                if (hourNext && this.config.dailyInterpolation) {
-                                    const energyNow = Math.round((hourNow.energy + (hourNext.energy - hourNow.energy) / 60 * moment().minutes()) * 1000) / 1000;
-                                    result.energy_now = energyNow;
-                                    result.energy_from_now = lastEnergy - energyNow;
-                                }
-                                else {
-                                    result.energy_now = hourNow.energy;
-                                    result.energy_from_now = lastEnergy - hourNow.energy;
-                                }
-                            }
-                            else {
-                                this.log.error(`${logPrefix} data for current hour not found!`);
-                            }
+                    if (day === moment().startOf('day').unix() && this.config.dailyEnabled) {
+                        this.cacheToday = hourlySorted;
+                        const calcedEnergy = this.getCalcedEnergyToday();
+                        result.energy_now = calcedEnergy.energy_now;
+                        result.energy_from_now = calcedEnergy.energy_from_now;
+                        if (this.config.accuracyEnabled) {
+                            result.accuracy = 0;
                         }
                     }
+                    this.log.debug(`${logPrefix} day ${moment(day * 1000).format(this.dateFormat)} - ${JSON.stringify(result)}`);
                     return result;
                 });
             }
@@ -215,6 +198,12 @@ class Solarprognose extends utils.Adapter {
         }
         return undefined;
     }
+    /**
+     * Check the next api polling time, proposed by the last api call it self
+     *
+     * @param preferredNextApiRequestAt
+     * @returns
+     */
     getNextUpdateTime(preferredNextApiRequestAt) {
         const logPrefix = '[getNextUpdateTime]:';
         let nextUpdate = moment().add(1, 'hours');
@@ -243,6 +232,131 @@ class Solarprognose extends utils.Adapter {
             console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
         }
         return nextUpdate;
+    }
+    /**
+     * set next polling time
+     *
+     * @param nextUpdateTime
+     */
+    nextPolling(nextUpdateTime) {
+        const logPrefix = '[nextPolling]:';
+        try {
+            if (nextUpdateTime) {
+                this.updateSchedule = schedule.scheduleJob(nextUpdateTime.toDate(), async () => {
+                    await this.updateData();
+                });
+            }
+            else {
+                this.log.warn(`${logPrefix} no next update time receive, try again in 1 hour`);
+                this.updateSchedule = schedule.scheduleJob(moment().add(1, 'hours').toDate(), async () => {
+                    await this.updateData();
+                });
+            }
+        }
+        catch (err) {
+            console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
+        }
+    }
+    /**
+     * Update adapter calculated energy states of today
+     */
+    async updateCalcedEnergyToday() {
+        const logPrefix = '[updateCalcedEnergyToday]:';
+        try {
+            if (this.config.dailyEnabled && this.cacheToday && this.cacheToday.length > 0) {
+                const result = this.getCalcedEnergyToday();
+                await this.setStateChangedAsync(`${tree.prognose.idChannel}.00.energy_from_now`, Math.round(result.energy_from_now * 1000) / 1000, true);
+                await this.setStateChangedAsync(`${tree.prognose.idChannel}.00.energy_now`, Math.round(result.energy_now * 1000) / 1000, true);
+            }
+        }
+        catch (err) {
+            console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
+        }
+    }
+    /**
+     * Calculate energy values of today
+     *
+     * @returns
+     */
+    getCalcedEnergyToday() {
+        const logPrefix = '[getCalcedEnergyToday]:';
+        const result = {
+            energy_now: 0,
+            energy_from_now: 0
+        };
+        try {
+            if (this.cacheToday && this.cacheToday.length > 0) {
+                const firstItem = this.cacheToday.length > 0 ? this.cacheToday[0] : null;
+                const lastItem = this.cacheToday.length > 0 ? this.cacheToday[this.cacheToday.length - 1] : null;
+                const nowTimestamp = moment().startOf('hour').unix() * 1000;
+                if (nowTimestamp < firstItem.timestamp) {
+                    // before first entry of day
+                    result.energy_now = 0;
+                    result.energy_from_now = _.round(lastItem.energy, 3);
+                    this.log.debug(`${logPrefix} now is before first item (${moment(firstItem.timestamp).format('HH:mm')}h) of today (result: ${JSON.stringify(result)})`);
+                }
+                else if (nowTimestamp > lastItem.timestamp) {
+                    // after last entry of day
+                    result.energy_now = _.round(lastItem.energy, 3);
+                    result.energy_from_now = 0;
+                    this.log.debug(`${logPrefix} now is after last item (${moment(lastItem.timestamp).format('HH:mm')}h) of today (result: ${JSON.stringify(result)})`);
+                }
+                else {
+                    // between first and last entry of day
+                    const hourNow = this.cacheToday.find(x => x.timestamp === moment().startOf('hour').unix() * 1000);
+                    if (hourNow) {
+                        const hourNext = this.cacheToday[this.cacheToday.indexOf(hourNow) + 1];
+                        if (hourNext && this.config.dailyInterpolation) {
+                            const energyNow = Math.round((hourNow.energy + (hourNext.energy - hourNow.energy) / 60 * moment().minutes()) * 1000) / 1000;
+                            result.energy_now = _.round(energyNow, 3);
+                            result.energy_from_now = _.round(lastItem.energy - energyNow, 3);
+                            this.log.debug(`${logPrefix} now is between ${moment(hourNow.timestamp).format('HH:mm')}h - ${moment(hourNext.timestamp).format('HH:mm')}h (interpolated result: ${JSON.stringify(result)})`);
+                        }
+                        else {
+                            result.energy_now = _.round(hourNow.energy, 3);
+                            result.energy_from_now = _.round(lastItem.energy - hourNow.energy, 3);
+                            this.log.debug(`${logPrefix} now is between ${moment(hourNow.timestamp).format('HH:mm')}h - ${moment(hourNext.timestamp).format('HH:mm')}h (result: ${JSON.stringify(result)})`);
+                        }
+                    }
+                    else {
+                        this.log.error(`${logPrefix} data for current hour not found!`);
+                    }
+                }
+            }
+            else {
+                this.log.error(`${logPrefix} no cached data for today exists!`);
+            }
+        }
+        catch (err) {
+            console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
+        }
+        return result;
+    }
+    /**
+     * calculate the accuracy of the forecast data of today. Compare it with own defined pv production state.
+     *
+     */
+    async calcAccuracy() {
+        const logPrefix = '[calcAccuracy]:';
+        try {
+            if (this.config.dailyEnabled && this.config.accuracyEnabled && this.config.todayEnergyObject && (await this.foreignObjectExists(this.config.todayEnergyObject))) {
+                const energy_now = await this.getStateAsync(`${tree.prognose.idChannel}.00.energy_now`);
+                const energy_pv = await this.getForeignStateAsync(this.config.todayEnergyObject);
+                let calc = 0;
+                if (energy_now && energy_now.val > 0) {
+                    if (energy_pv.val <= energy_now.val) {
+                        calc = Math.round(energy_pv.val / energy_now.val * 100);
+                    }
+                    else {
+                        calc = Math.round(energy_now.val / energy_pv.val * 100);
+                    }
+                }
+                await this.setStateChangedAsync(`${tree.prognose.idChannel}.00.accuracy`, calc, true);
+            }
+        }
+        catch (err) {
+            console.error(`${logPrefix} error: ${err.message}, stack: ${err.stack}`);
+        }
     }
 }
 // replace only needed for dev system

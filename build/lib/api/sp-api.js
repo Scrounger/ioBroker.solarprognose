@@ -2,7 +2,7 @@ import { request } from "undici";
 import { STATUS_CODES } from "node:http";
 import util from "node:util";
 import { API_TIMEOUT } from "./sp-settings.js";
-import { stateDefinition } from "../myTypes.js";
+import * as tree from '../tree/index.js';
 export var ApiEndpoints;
 (function (ApiEndpoints) {
     ApiEndpoints["hourly"] = "hourly";
@@ -114,7 +114,7 @@ export class SpApi {
                 }
                 else {
                     if (res.status !== 0) {
-                        this.log.error(`${logPrefix} data received with error code: ${res.status} - ${stateDefinition.statusResponse.common.states[res.status]}`);
+                        this.log.error(`${logPrefix} data received with error code: ${res.status} - ${tree.prognose.get().status.states[res.status]}`);
                         this.log.debug(`${logPrefix} ${JSON.stringify(res)}`);
                         return res;
                     }
@@ -122,8 +122,8 @@ export class SpApi {
             }
             else {
                 this.log.warn(`${logPrefix} Test mode is active!`);
-                const { default: data } = await import('../../../test/testDataHourly.json', { assert: { type: 'json' } });
-                return data;
+                const data = await import('../../../test/testDataHourly.json', { assert: { type: 'json' } });
+                return data.default;
             }
         }
         catch (error) {

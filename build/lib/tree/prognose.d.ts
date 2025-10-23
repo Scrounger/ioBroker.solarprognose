@@ -1,6 +1,6 @@
 import { myTreeDefinition } from "../myIob.js";
 export declare namespace prognose {
-    const idChannel = "forecast.current";
+    const idChannel = "forecast";
     function get(): {
         [key: string]: myTreeDefinition;
     };

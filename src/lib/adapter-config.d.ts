@@ -15,7 +15,7 @@ declare global {
 			hourlyEnabled: boolean;
 			dailyEnabled: boolean;
 			dailyMax: number;
-			accuracyEnabled: number;
+			accuracyEnabled: boolean;
 			todayEnergyObject: string;
 			dailyInterpolation: boolean;
 		}

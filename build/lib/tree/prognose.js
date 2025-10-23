@@ -1,10 +1,9 @@
 import * as myHelper from '../helper.js';
-import { stateDefinition } from "../myTypes.js";
 import moment from "moment";
 export var prognose;
 (function (prognose) {
     let keys = undefined;
-    prognose.idChannel = 'forecast.current';
+    prognose.idChannel = 'forecast';
     function get() {
         return {
             json: {
@@ -26,7 +25,37 @@ export var prognose;
             status: {
                 iobType: 'number',
                 name: 'api status response',
-                states: stateDefinition.statusResponse.common.states
+                states: {
+                    0: 'OK',
+                    '-2': 'INVALID ACCESS TOKEN',
+                    '-3': 'MISSING PARAMETER ACCESS TOKEN',
+                    '-4': 'EMPTY PARAMETER ACCESS TOKEN',
+                    '-5': 'INVALID TYPE',
+                    '-6': 'MISSING TYPE',
+                    '-7': 'INVALID ID',
+                    '-8': 'ACCESS DENIED',
+                    '-9': 'INVALID ITEM',
+                    '-10': 'INVALID TOKEN',
+                    '-11': 'NO SOLAR DATA AVAILABLE',
+                    '-12': 'NO DATA',
+                    '-13': 'INTERNAL ERROR',
+                    '-14': 'UNKNOWN ERROR',
+                    '-15': 'INVALID START DAY',
+                    '-16': 'INVALID END DAY',
+                    '-17': 'INVALID DAY',
+                    '-18': 'INVALID WEATHER SERVICE ID',
+                    '-19': 'DAILY QUOTA EXCEEDED',
+                    '-20': 'INVALID OR MISSING ELEMENT ITEM',
+                    '-21': 'NO PARAMETER',
+                    '-22': 'INVALID PERIOD',
+                    '-23': 'INVALID START EPOCH TIME',
+                    '-24': 'INVALID END EPOCH TIME',
+                    '-25': 'ACCESS DENIED TO ITEM DUE TO LIMIT',
+                    '-26': 'NO CLEARSKY VALUES',
+                    '-27': 'MISSING INPUT ID AND TOKEN',
+                    '-28': 'INVALID ALGORITHM',
+                    '-29': 'FAILED TO LOAD WEATHER LOCATION ITEM'
+                }
             },
             forecast: {
                 arrayChannelIdZeroPad: 2,
@@ -60,6 +89,7 @@ export var prognose;
                     energy_now: {
                         iobType: 'number',
                         unit: 'kWh',
+                        subscribeMe: true,
                         conditionToCreateState(objDevice, objChannel, adapter) {
                             // only wired and wireless clients
                             return adapter.config.dailyEnabled;
@@ -79,6 +109,14 @@ export var prognose;
                             return Math.round(val * 1000) / 1000;
                         },
                     },
+                    accuracy: {
+                        iobType: 'number',
+                        conditionToCreateState(objDevice, objChannel, adapter) {
+                            // only wired and wireless clients
+                            return adapter.config.accuracyEnabled;
+                        },
+                        unit: '%',
+                    },
                     hourly: {
                         arrayChannelIdFromProperty(objDevice, objChannel, i, adapter) {
                             return `${myHelper.zeroPad(moment(objChannel.timestamp).hour(), 2)}h`;
@@ -91,6 +129,13 @@ export var prognose;
                             return adapter.config.hourlyEnabled;
                         },
                         array: {
+                            date: {
+                                iobType: 'string',
+                                valFromProperty: 'timestamp',
+                                readVal(val, adapter, device, channel, id) {
+                                    return moment(val).format(`ddd ${adapter.dateFormat} HH:mm:ss`);
+                                },
+                            },
                             energy: {
                                 iobType: 'number',
                                 unit: 'kWh',
@@ -104,7 +149,7 @@ export var prognose;
                                 readVal(val, adapter, device, channel, id) {
                                     return Math.round(val * 1000) / 1000;
                                 },
-                            },
+                            }
                         }
                     }
                 },
