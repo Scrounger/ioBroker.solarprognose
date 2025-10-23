@@ -33,8 +33,7 @@ Solar forecast based on the API from [solarprognose.de](https://www.solarprognos
 	Placeholder for the next version (at the beginning of the line):
 	### **WORK IN PROGRESS**
 -->
-
-### **WORK IN PROGRESS**
+### 2.0.0 (2025-10-23)
 
 - (Scrounger) !!! breaking changes - states structure has been completely revised !!!
 - (Scrounger) dependencies updated

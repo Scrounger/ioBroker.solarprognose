@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "solarprognose",
-    "version": "1.2.2",
+    "version": "2.0.0",
     "news": {
+      "2.0.0": {
+        "en": "!!! breaking changes - states structure has been completely revised !!!\ndependencies updated\nnode minimum set to 20\nconverted to esm\neslint 9 added",
+        "de": "! brechen veränderungen - zustandsstruktur wurde komplett überarbeitet !!!\naktualisierte abhängigkeiten\nnode minimum eingestellt auf 20\nin esm umgewandelt\neslint 9 hinzugefügt",
+        "ru": "!!! ломая изменения - структура штатов была полностью пересмотрена!!!\nобновленные зависимости\nминимальный размер узла 20\nпреобразуется в эсм\nэслинт 9 добавлено",
+        "pt": "!!!! quebrando mudanças - estrutura de estados foi completamente revisada !!!!\ndependências atualizadas\nnó mínimo definido para 20\nconvertido em esm\neslint 9 adicionado",
+        "nl": "!!! breken veranderingen - staten structuur is volledig herzien !!!\nafhankelijkheden bijgewerkt\nknooppunt minimum ingesteld op 20\nomgezet in esm\neslint 9 toegevoegd",
+        "fr": "!!! rupture des changements - la structure des états a été complètement révisée !!!\ndépendances mises à jour\nnoeud minimum fixé à 20\nconverti en esm\neslint 9 ajouté",
+        "it": "♪ cambiamenti di rottura - la struttura degli stati è stata completamente revisionata!!!\ndipendenze aggiornate\nset minimo nodo a 20\nconvertito in esm\neslint 9 aggiunto",
+        "es": "!!! cambios de ruptura - estructura de estados ha sido completamente revisado !!!\ndependencias actualizadas\nmínimo de nodo fijado a 20\nconvertido a esm\neslint 9 añadido",
+        "pl": "! łamanie zmian - struktura stanów została całkowicie zmieniona!!!\nzaktualizowane zależności\nminimum węzła ustawionego na 20\nprzeliczane na esm\ndodano eslint 9",
+        "uk": "про нас перерву змін - структура держави повністю переглянуто!\nоновлені залежності\nмінімальний набір вузлів до 20\nперетворена в есм\neslint 9 додано",
+        "zh-cn": "快点! 国家结构已完全修改!\n更新依赖关系\n节点最小设置为 20\n转换为 esm\n增加了第9条"
+      },
       "1.2.2": {
         "en": "bug fixes",
         "de": "fehlerbehebungen",

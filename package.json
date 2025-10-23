@@ -1,6 +1,6 @@
 {
   "name": "iobroker.solarprognose",
-  "version": "1.2.2",
+  "version": "2.0.0",
   "description": "Solar forecast based on the API from solarprognose.de",
   "author": {
     "name": "Scrounger",
