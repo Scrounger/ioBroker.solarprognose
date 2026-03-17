@@ -39,11 +39,14 @@ export class myIob {
             };
             if (onlineId) {
                 common.statusStates = {
-                    onlineId: onlineId,
+                    onlineId: onlineId.startsWith(this.adapter.namespace) ? onlineId : `${this.adapter.namespace}.${onlineId}`,
                 };
             }
             if (errorId) {
-                common.statusStates.errorId = errorId;
+                if (!common.statusStates) {
+                    common.statusStates = {};
+                }
+                common.statusStates.errorId = errorId.startsWith(this.adapter.namespace) ? errorId : `${this.adapter.namespace}.${errorId}`;
             }
             if (!(await this.adapter.objectExists(id))) {
                 this.log.debug(`${logPrefix} creating device '${id}'`);
@@ -205,6 +208,10 @@ export class myIob {
                                             stateValueChanged = true;
                                             this.log.silly(`${logPrefix} value of state '${logMsgState}' changed to ${val}`);
                                         }
+                                        if (!stateValueChanged && Object.hasOwn(treeDef, 'updateTs') && treeDef.updateTs === true) {
+                                            this.log.silly(`${logPrefix} timestamp of state '${logMsgState}' updated`);
+                                            await this.adapter.setState(`${channel}.${stateId}`, val, true);
+                                        }
                                     }
                                     else {
                                         if (!Object.hasOwn(treeDef, 'id')) {
@@ -310,7 +317,9 @@ export class myIob {
                 }
             }
             else {
-                this.log.warn(`${logPrefix} adapter has no connection!`);
+                if (this.log.level === 'debug') {
+                    this.log.warn(`${logPrefix} adapter has no connection!`);
+                }
             }
         }
         catch (error) {

@@ -1,8 +1,21 @@
 {
   "common": {
     "name": "solarprognose",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "news": {
+      "2.0.1": {
+        "en": "dependencies updated",
+        "de": "aktualisierte abhängigkeiten",
+        "ru": "обновленные зависимости",
+        "pt": "dependências atualizadas",
+        "nl": "afhankelijkheden bijgewerkt",
+        "fr": "dépendances mises à jour",
+        "it": "dipendenze aggiornate",
+        "es": "dependencias actualizadas",
+        "pl": "zaktualizowane zależności",
+        "uk": "оновлені залежності",
+        "zh-cn": "更新依赖关系"
+      },
       "2.0.0": {
         "en": "!!! breaking changes - states structure has been completely revised !!!\ndependencies updated\nnode minimum set to 20\nconverted to esm\neslint 9 added",
         "de": "! brechen veränderungen - zustandsstruktur wurde komplett überarbeitet !!!\naktualisierte abhängigkeiten\nnode minimum eingestellt auf 20\nin esm umgewandelt\neslint 9 hinzugefügt",
