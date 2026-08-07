@@ -70,6 +70,8 @@ Solar forecast based on the API from [solarprognose.de](https://www.solarprognos
 
 - (Scrounger) initial release
 
+[Older changelogs can be found there](CHANGELOG_OLD.md)
+
 ## License
 
 MIT License
