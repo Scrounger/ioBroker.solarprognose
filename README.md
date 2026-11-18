@@ -1,3 +1,18 @@
+> [!WARNING]
+> **This repository has been archived.**
+>
+> Unfortunately, [solarprognose.de](https://www.solarprognose.de/) has discontinued its service due to the serious illness of its operator.
+>
+> As this adapter relies on solarprognose.de as its data source, it can no longer provide its intended functionality.
+>
+> Since the underlying service is no longer available and there is currently no alternative data source, further development and maintenance of this adapter have been discontinued.
+>
+> I would like to express my sincere thanks to the operator of solarprognose.de for providing this valuable service over the years. My thoughts are with him and I wish him all the best.
+>
+> Thank you to everyone who has used this adapter and supported the project. Your interest and support have been greatly appreciated.
+>
+> **This repository is now archived and will no longer receive updates or support.**
+
 ![Logo](admin/solarprognose.png)
 
 # ioBroker.solarprognose
